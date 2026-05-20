@@ -200,6 +200,8 @@ func (client *Client) newRequest(ctx context.Context, messageRequest MessageRequ
 		return nil, err
 	}
 
+	data = sanitizeEmptyNameToolsJSON(data)
+
 	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, client.baseURL+"/v1/messages", bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -213,6 +215,71 @@ func (client *Client) newRequest(ctx context.Context, messageRequest MessageRequ
 		httpRequest.Header.Set("user-agent", client.userAgent)
 	}
 	return httpRequest, nil
+}
+
+func sanitizeEmptyNameToolsJSON(data []byte) []byte {
+	var payload map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return data
+	}
+
+	rawTools, ok := payload["tools"].([]any)
+	if !ok || len(rawTools) == 0 {
+		return data
+	}
+
+	filtered := make([]any, 0, len(rawTools))
+	removed := 0
+
+	for _, item := range rawTools {
+		if isEmptyNameTool(item) {
+			removed++
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+
+	if removed == 0 {
+		return data
+	}
+
+	payload["tools"] = filtered
+
+	sanitized, err := json.Marshal(payload)
+	if err != nil {
+		return data
+	}
+
+	slog.Default().Warn("已过滤空名称工具",
+		"removed", removed,
+		"tools_before", len(rawTools),
+		"tools_after", len(filtered),
+	)
+
+	return sanitized
+}
+
+func isEmptyNameTool(item any) bool {
+	tool, ok := item.(map[string]any)
+	if !ok {
+		return false
+	}
+
+	if name, exists := tool["name"]; exists {
+		if s, ok := name.(string); ok && strings.TrimSpace(s) == "" {
+			return true
+		}
+	}
+
+	if fn, ok := tool["function"].(map[string]any); ok {
+		if name, exists := fn["name"]; exists {
+			if s, ok := name.(string); ok && strings.TrimSpace(s) == "" {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func decodeProviderError(response *http.Response) error {
