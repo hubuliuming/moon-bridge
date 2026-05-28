@@ -219,6 +219,10 @@ providers:
 routes:
     # Optional aliases. Provider models are listed directly in the Codex catalog
     # as model(provider) format; routes only add friendly fallback names.
+  codex-auto-review:
+  model: deepseek-v4-pro
+  provider: deepseek
+   
   moonbridge:
     model: deepseek-v4-pro
     provider: deepseek
